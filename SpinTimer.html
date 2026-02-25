@@ -769,6 +769,7 @@ input[type="range"]::-webkit-slider-thumb {
   <div style="color:var(--muted);font-size:13px;">ワークアウト完了</div>
 
   <button class="finish-again" onclick="backToSetup()">STOP</button>
+
   <div style="margin-top:12px;">
     <span class="nav-link" onclick="showHistory()">履歴を見る →</span>
   </div>
@@ -792,7 +793,20 @@ input[type="range"]::-webkit-slider-thumb {
 </div>
 
 <script>
+var audioCtx = null;
+var beatMode = 'click';
+var beatVolume = 0.5;
+var timerInterval = null;
+var beatTimeout = null;
+var paused = false;
+var cfg = {};
+var elapsed = 0;
+var totalSec = 0;
 
+function resetConfig() {
+  var defaults = { peakRpm: 80, totalMin: 30, warmMin: 5, coolMin: 5, startRpm: 64, endRpm: 64 };
+  ['peakRpm','totalMin','warmMin','coolMin','startRpm','endRpm'].forEach(function(id) {
+    document.getElementById(id).value = defaults[id];
   });
   localStorage.removeItem('spinConfig');
   drawRamp();
@@ -861,7 +875,6 @@ function selectBeatW(btn) {
 }
 
 function getRpmAt(sec, c) {
-  var endR = c.endRpm !== undefined ? c.endRpm : c.startRpm;
   if (sec <= c.warmSec) {
     var t = sec / c.warmSec;
     return c.startRpm + (c.peakRpm - c.startRpm) * (t * t);
@@ -869,6 +882,7 @@ function getRpmAt(sec, c) {
     return c.peakRpm;
   } else {
     var t2 = (sec - c.warmSec - c.peakSec) / c.coolSec;
+    var endR = c.endRpm !== undefined ? c.endRpm : c.startRpm;
     return c.peakRpm - (c.peakRpm - endR) * (1 - (1 - t2) * (1 - t2));
   }
 }
@@ -885,8 +899,7 @@ function drawRamp() {
   var warm  = +document.getElementById('warmMin').value * 60;
   var cool  = +document.getElementById('coolMin').value * 60;
   var peak  = +document.getElementById('peakRpm').value;
-  var start = +document.getElementById('startRpm').value || Math.round(peak * 0.8);
-  var endRpm = +document.getElementById('endRpm').value || Math.round(peak * 0.8);
+  var start = +document.getElementById('startRpm').value || Math.round(peak * 0.7);
   var c = { warmSec: warm, peakSec: total - warm - cool, coolSec: cool, peakRpm: peak, startRpm: start };
   var denom = peak - start * 0.8 + 1;
 
@@ -930,7 +943,7 @@ function drawRamp() {
 // 前回の設定を復元
 (function() {
   var saved = JSON.parse(localStorage.getItem('spinConfig') || '{}');
-  var defaults = { peakRpm: 80, totalMin: 30, warmMin: 5, coolMin: 5, startRpm: 56 };
+  var defaults = { peakRpm: 80, totalMin: 30, warmMin: 5, coolMin: 5, startRpm: 64, endRpm: 64 };
   ['peakRpm','totalMin','warmMin','coolMin','startRpm','endRpm'].forEach(function(id) {
     var val = saved[id] !== undefined ? saved[id] : defaults[id];
     document.getElementById(id).value = val;
@@ -999,10 +1012,8 @@ function startWorkout() {
 
   tick();
   timerInterval = setInterval(tick, 1000);
-  orbitAngle = 0;
-  flashCount = 0;
-  updateOrbit();
   scheduleBeat();
+  updateOrbit();
 }
 
 function tick() {
@@ -1049,35 +1060,6 @@ function tick() {
 
   elapsed++;
   if (elapsed > totalSec) { finishWorkout(); }
-}
-
-function backToSetup() {
-  stopWorkout();
-  document.getElementById('setup-screen').style.display = '';
-  document.getElementById('workout-screen').style.display = 'none';
-  document.getElementById('history-screen').style.display = 'none';
-}
-
-function showHistory() {
-  document.getElementById('history-screen').style.display = '';
-  document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('workout-screen').style.display = 'none';
-}
-
-function clearAllHistory() {
-  localStorage.removeItem('spinHistory');
-  document.getElementById('histList').innerHTML = '';
-  closeConfirm();
-}
-
-function closeConfirm() {
-  var el = document.querySelector('.confirm-overlay');
-  if (el) el.style.display = 'none';
-}
-
-function finishWorkout() {
-  stopWorkout();
-  playFinishMusic();
 }
 
 function playSound() {
@@ -1191,8 +1173,122 @@ function stopWorkout() {
 }
 
 var finishMusicTimeout = null;
+var finishOscillators = [];
 
+function playFinishMusic() {
+  var el = document.getElementById('finishAudioEl');
+  if (el) { el.currentTime = 0; el.play(); }
+}
 
+function stopFinishMusic() {
+  var el = document.getElementById('finishAudioEl');
+  if (el) { el.pause(); el.currentTime = 0; }
+}
+
+function finishWorkout() {
+  clearInterval(timerInterval);
+  clearTimeout(beatTimeout);
+  stopOrbit();
+
+  var record = {
+    date: new Date().toLocaleDateString('ja-JP', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }),
+    totalMin: cfg.totalMin,
+    peakRpm: cfg.peakRpm
+  };
+  var hist = JSON.parse(localStorage.getItem('spinHistory') || '[]');
+  hist.unshift(record);
+  if (hist.length > 30) hist.pop();
+  localStorage.setItem('spinHistory', JSON.stringify(hist));
+
+  document.getElementById('workout-screen').style.display = 'none';
+  document.getElementById('finish-screen').style.display = 'flex';
+  playFinishMusic();
+}
+
+function backToSetup() {
+  stopFinishMusic();
+  document.getElementById('finish-screen').style.display = 'none';
+  document.getElementById('history-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+  drawRamp();
+}
+
+function showHistory() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('finish-screen').style.display = 'none';
+  document.getElementById('history-screen').style.display = 'flex';
+  renderHistory();
+}
+
+function renderHistory() {
+  var hist = JSON.parse(localStorage.getItem('spinHistory') || '[]');
+  var list = document.getElementById('histList');
+  if (hist.length === 0) {
+    list.innerHTML = '<div class="hist-empty">まだ記録がありません</div>';
+    return;
+  }
+
+  list.innerHTML = hist.map(function(h, i) {
+    return '<div class="hist-card-wrap" id="wrap-' + i + '">' +
+      '<div class="hist-delete-bg">削除</div>' +
+      '<div class="hist-card" id="card-' + i + '">' +
+        '<div><div class="hist-date">' + h.date + '</div>' +
+        '<div class="hist-info">' + h.totalMin + '分</div></div>' +
+        '<div><div class="hist-rpm">' + h.peakRpm + '</div>' +
+        '<div class="hist-rpmlabel">peak rpm</div></div>' +
+      '</div>' +
+    '</div>';
+  }).join('') +
+  '<button class="clear-all-btn" onclick="openConfirm()">すべての履歴を削除</button>';
+
+  // スワイプ処理
+  hist.forEach(function(h, i) {
+    var wrap = document.getElementById('wrap-' + i);
+    var card = document.getElementById('card-' + i);
+    var delBg = wrap.querySelector('.hist-delete-bg');
+    var startX = 0;
+
+    card.addEventListener('touchstart', function(e) {
+      startX = e.touches[0].clientX;
+    }, { passive: true });
+
+    card.addEventListener('touchend', function(e) {
+      var dx = e.changedTouches[0].clientX - startX;
+      if (dx < -50) {
+        wrap.classList.add('swiped');
+      } else if (dx > 30) {
+        wrap.classList.remove('swiped');
+      }
+    }, { passive: true });
+
+    // 赤いエリアをタップで削除
+    delBg.addEventListener('click', function() {
+      deleteHistoryItem(i);
+    });
+  });
+}
+
+function deleteHistoryItem(index) {
+  var hist = JSON.parse(localStorage.getItem('spinHistory') || '[]');
+  hist.splice(index, 1);
+  localStorage.setItem('spinHistory', JSON.stringify(hist));
+  renderHistory();
+}
+
+function openConfirm() {
+  var overlay = document.getElementById('confirmOverlay');
+  overlay.style.display = 'flex';
+}
+
+function closeConfirm() {
+  document.getElementById('confirmOverlay').style.display = 'none';
+}
+
+function clearAllHistory() {
+  localStorage.removeItem('spinHistory');
+  closeConfirm();
+  renderHistory();
+}
 
 window.addEventListener('resize', drawRamp);
 
@@ -1206,6 +1302,5 @@ document.addEventListener('touchstart', function() {
   resumeAudioIfNeeded();
 }, { passive: true });
 </script>
-
 </body>
 </html>
