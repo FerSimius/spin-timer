@@ -970,7 +970,6 @@ drawRamp();
 
 function startWorkout() {
   initAudio();
-  prepareFinishAudio();
   // ワークアウト画面のビートボタンをセットアップ画面と同期
   document.querySelectorAll('#beatToggleW .beat-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.val === beatMode);
