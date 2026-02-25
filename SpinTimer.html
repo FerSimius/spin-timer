@@ -1051,6 +1051,35 @@ function tick() {
   if (elapsed > totalSec) { finishWorkout(); }
 }
 
+function backToSetup() {
+  stopWorkout();
+  document.getElementById('setup-screen').style.display = '';
+  document.getElementById('workout-screen').style.display = 'none';
+  document.getElementById('history-screen').style.display = 'none';
+}
+
+function showHistory() {
+  document.getElementById('history-screen').style.display = '';
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('workout-screen').style.display = 'none';
+}
+
+function clearAllHistory() {
+  localStorage.removeItem('spinHistory');
+  document.getElementById('histList').innerHTML = '';
+  closeConfirm();
+}
+
+function closeConfirm() {
+  var el = document.querySelector('.confirm-overlay');
+  if (el) el.style.display = 'none';
+}
+
+function finishWorkout() {
+  stopWorkout();
+  playFinishMusic();
+}
+
 function playSound() {
   if (beatMode === 'off' || !audioCtx) return;
   var o = audioCtx.createOscillator();
