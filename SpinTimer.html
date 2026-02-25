@@ -1117,8 +1117,10 @@ function updateOrbit() {
       var degsPerMs = (rpm * 360) / 60000;
       var prevAngle = orbitAngle;
       orbitAngle = (orbitAngle - degsPerMs * (ts - orbitLastTime) + 360) % 360;
-      // 12時通過時（0度をまたいだとき）にflash
-      if (prevAngle < orbitAngle) flashRing();
+      // 彗星の先端が12時を通過した時にflash（270度補正）
+      var currHead = (orbitAngle + 270) % 360;
+      var prevHead = (prevAngle + 270) % 360;
+      if (currHead > prevHead) flashRing();
       var ring = document.getElementById('orbitRing');
       if (ring) {
         var a = orbitAngle;
