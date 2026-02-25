@@ -850,13 +850,14 @@ function initAudio() {
   // iOS PWA: audio要素もウォームアップ（ユーザー操作時に一度再生することで後の再生を許可）
   var finishEl = document.getElementById('finishAudioEl');
   if (finishEl) {
-    finishEl.muted = true;
+    var originalVol = finishEl.volume;
+    finishEl.volume = 0;
     finishEl.play().then(function() {
       finishEl.pause();
       finishEl.currentTime = 0;
-      finishEl.muted = false;
+      finishEl.volume = originalVol;
     }).catch(function() {
-      finishEl.muted = false;
+      finishEl.volume = originalVol;
     });
   }
 }
