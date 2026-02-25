@@ -847,18 +847,10 @@ function initAudio() {
   src.connect(audioCtx.destination);
   src.start(0);
   
-  // iOS PWA: audio要素もウォームアップ（ユーザー操作時に一度再生することで後の再生を許可）
+  // iOS PWA: audio要素もウォームアップ（ユーザー操作時にloadすることで後の再生を許可）
   var finishEl = document.getElementById('finishAudioEl');
   if (finishEl) {
-    var originalVol = finishEl.volume;
-    finishEl.volume = 0;
-    finishEl.play().then(function() {
-      finishEl.pause();
-      finishEl.currentTime = 0;
-      finishEl.volume = originalVol;
-    }).catch(function() {
-      finishEl.volume = originalVol;
-    });
+    finishEl.load();
   }
 }
 
