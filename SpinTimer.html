@@ -1124,9 +1124,9 @@ function updateOrbit() {
       var rpm = getRpmAt(elapsed, cfg);
       var degsPerMs = (rpm * 360) / 60000;
       var prevAngle = orbitAngle;
-      orbitAngle = (orbitAngle + degsPerMs * (ts - orbitLastTime)) % 360;
+      orbitAngle = (orbitAngle - degsPerMs * (ts - orbitLastTime) + 360) % 360;
       // 12時通過時（0度をまたいだとき）にflash
-      if (prevAngle > orbitAngle) flashRing();
+      if (prevAngle < orbitAngle) flashRing();
       var ring = document.getElementById('orbitRing');
       if (ring) {
         var a = orbitAngle;
