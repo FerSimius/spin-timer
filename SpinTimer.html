@@ -1016,6 +1016,7 @@ function startWorkout() {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('workout-screen').style.display = 'flex';
 
+  requestWakeLock();
   tick();
   timerInterval = setInterval(tick, 1000);
   scheduleBeat();
@@ -1104,6 +1105,36 @@ function resumeAudioIfNeeded() {
   }
 }
 
+// ─── Screen Wake Lock（タイマー中の自動ロック防止） ───
+var wakeLockSentinel = null;
+
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+      wakeLockSentinel.addEventListener('release', function() {
+        wakeLockSentinel = null;
+      });
+    } catch (e) {
+      console.log('Wake Lock request failed:', e.message);
+    }
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLockSentinel) {
+    wakeLockSentinel.release();
+    wakeLockSentinel = null;
+  }
+}
+
+// ページが再表示された時にWake Lockを再取得（OSが自動解放するため）
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && !paused && timerInterval) {
+    requestWakeLock();
+  }
+});
+
 var orbitAngle = 0;
 var orbitRaf = null;
 var orbitLastTime = null;
@@ -1167,13 +1198,14 @@ function scheduleBeat() {
 function togglePause() {
   paused = !paused;
   document.getElementById('pauseBtn').textContent = paused ? 'RESUME' : 'PAUSE';
-  if (!paused) { initAudio(); updateOrbit(); scheduleBeat(); } else { clearTimeout(beatTimeout); stopOrbit(); }
+  if (!paused) { initAudio(); requestWakeLock(); updateOrbit(); scheduleBeat(); } else { clearTimeout(beatTimeout); releaseWakeLock(); stopOrbit(); }
 }
 
 function stopWorkout() {
   clearInterval(timerInterval);
   clearTimeout(beatTimeout);
   stopOrbit();
+  releaseWakeLock();
   stopFinishMusic();
   document.getElementById('workout-screen').style.display = 'none';
   document.getElementById('setup-screen').style.display = 'flex';
@@ -1206,6 +1238,7 @@ function finishWorkout() {
   clearInterval(timerInterval);
   clearTimeout(beatTimeout);
   stopOrbit();
+  releaseWakeLock();
 
   var record = {
     date: new Date().toLocaleDateString('ja-JP', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }),
