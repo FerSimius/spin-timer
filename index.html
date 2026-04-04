@@ -795,7 +795,40 @@ input[type="range"]::-webkit-slider-thumb {
   </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
+// Firebase初期化
+var firebaseConfig = {
+  apiKey: "AIzaSyDki5neHtOYH_Tm5ZXZJn447BEnuF8isVU",
+  authDomain: "spin-timer-89648.firebaseapp.com",
+  databaseURL: "https://spin-timer-89648-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "spin-timer-89648",
+  storageBucket: "spin-timer-89648.firebasestorage.app",
+  messagingSenderId: "387457092668",
+  appId: "1:387457092668:web:5f851bb31723d8b9b9c739"
+};
+firebase.initializeApp(firebaseConfig);
+var fbDb = firebase.database();
+
+function saveHistToFirebase(hist) {
+  fbDb.ref('history').set(hist).catch(function(e) {
+    console.log('Firebase保存エラー:', e);
+  });
+}
+
+function syncFromFirebase(callback) {
+  fbDb.ref('history').once('value', function(snapshot) {
+    var data = snapshot.val();
+    if (data && Array.isArray(data) && data.length > 0) {
+      localStorage.setItem('spinHistory', JSON.stringify(data));
+    }
+    if (callback) callback();
+  }, function() {
+    if (callback) callback();
+  });
+}
+
 var audioCtx = null;
 var beatMode = 'click';
 var beatVolume = 0.5;
@@ -1226,6 +1259,7 @@ function stopWorkout() {
     hist.unshift(record);
     if (hist.length > 30) hist.pop();
     localStorage.setItem('spinHistory', JSON.stringify(hist));
+    saveHistToFirebase(hist);
   }
 
   document.getElementById('workout-screen').style.display = 'none';
@@ -1270,6 +1304,7 @@ function finishWorkout() {
   hist.unshift(record);
   if (hist.length > 30) hist.pop();
   localStorage.setItem('spinHistory', JSON.stringify(hist));
+  saveHistToFirebase(hist);
 
   document.getElementById('workout-screen').style.display = 'none';
   document.getElementById('finish-screen').style.display = 'flex';
@@ -1288,7 +1323,7 @@ function showHistory() {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('finish-screen').style.display = 'none';
   document.getElementById('history-screen').style.display = 'flex';
-  renderHistory();
+  syncFromFirebase(renderHistory);
 }
 
 function renderHistory() {
@@ -1351,6 +1386,7 @@ function deleteHistoryItem(index) {
   var hist = JSON.parse(localStorage.getItem('spinHistory') || '[]');
   hist.splice(index, 1);
   localStorage.setItem('spinHistory', JSON.stringify(hist));
+  saveHistToFirebase(hist);
   renderHistory();
 }
 
@@ -1365,6 +1401,7 @@ function closeConfirm() {
 
 function clearAllHistory() {
   localStorage.removeItem('spinHistory');
+  fbDb.ref('history').remove();
   closeConfirm();
   renderHistory();
 }
